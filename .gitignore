@@ -1,0 +1,23 @@
+*~
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+*.class
+classes
+
+# maven
+target
+
+# idea project files
+.idea
+*.iml
+*.iws
+out
+
+# eclipse project files
+.project
+.classpath
+.settings
