@@ -1,6 +1,4 @@
-#!/Users/marcus/Applications/groovy/2.0/bin/groovy
-
-import static CpUtil.*
+import static CpUtil2.*
 
 /**
  * Groovy script simply copying image files with finding unique target filenames if existing file is not the same.
@@ -43,10 +41,10 @@ final File destinationDir   = exitIfIllegalDirectory(opt.d as File)
 final fileFilter = new FileFilter(opt.t as String)
 */
 
-final File sourceDir        = exitIfIllegalDirectory('/Volumes/Leopard/Users/marcus/Pictures/backup/07_2013')
-final File destinationDir   = exitIfIllegalDirectory('/Volumes/toshi_1tb/Fotos_und_Videos/fotos/2013/07/')
+final File sourceDir        = assertIsExistingDirectory('/Volumes/toshi_1tb/t/videos/2014/09')
+final File destinationDir   = assertIsExistingDirectory('/Volumes/toshi_1tb/Fotos_und_Videos/videos/2014/09')
 
-final fileFilter = new MediaFileFilter('img')
+final fileFilter = new MediaFileFilter('all')
 
 long filesCopied = 0
 long bytesCopied = 0
@@ -93,7 +91,7 @@ class MediaFileFilter implements FileFilter {
 
     @Override
     boolean accept(File pathname) {
-        if (pathname.isDirectory()) return false
+        if (pathname.isDirectory() || pathname.name.startsWith('.')) return false
 
         switch (mediaType) {
             case MediaType.Images: return !isVideo(pathname)
@@ -104,9 +102,9 @@ class MediaFileFilter implements FileFilter {
 
 }
 
-class CpUtil {
+class CpUtil2 {
 
-    static File exitIfIllegalDirectory(dir) {
+    static File assertIsExistingDirectory(dir) {
         final File directory = dir as File
 
         if (!directory.exists() || !directory.isDirectory()) {

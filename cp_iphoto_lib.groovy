@@ -17,8 +17,12 @@ import static CpUtil.*
  * 5.7.2013
  */
 
-final sourceRoot = '/Volumes/Leopard/Users/marcus/Pictures/iPhoto Library/Originals'
-final targetRoot = '/Volumes/toshi_1tb/iPhoto_Export'
+
+// final sourceRoot = '/Volumes/Leopard/Users/marcus/Pictures/iPhoto Library/Originals'
+// final targetRoot = '/Volumes/toshi_1tb/iPhoto_Export'
+
+final sourceRoot = '/Volumes/Leopard/Users/marcus/Pictures/backup/xfer'
+final targetRoot = '/Volumes/toshi_1tb/Fotos_und_Videos/t'
 
 final line = '-' * 100
 
@@ -54,7 +58,7 @@ println "Took ${timeAsString(durationMillis)}"
 
 //~ utility functions requiring class scope
 
-class CpUtil {
+class CpUtil3 {
 
     static copy(File src, File dest) {
 
