@@ -1,3 +1,5 @@
+package iphoto
+
 import groovy.io.FileType
 
 final iPhotoRoot = '/Volumes/Leopard/Users/marcus/Pictures/iPhoto Library/Originals'
