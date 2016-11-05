@@ -1,6 +1,6 @@
 package iphoto
 
-import static CpUtil.*
+import static CpUtil3.*
 
 /**
  * Groovy script setting your photos and movies captured in an iPhoto library free.
@@ -38,14 +38,14 @@ println line
 (sourceRoot as File).eachFileRecurse(groovy.io.FileType.FILES) { final File srcFile ->
     final lastModified = new Date(srcFile.lastModified())
 
-    final mediaFolder = CpUtil.isVideo(srcFile) ? 'videos' : 'fotos'
+    final mediaFolder = CpUtil3.isVideo(srcFile) ? 'videos' : 'fotos'
 
     final year  = lastModified[Calendar.YEAR] as String
     final month = ((lastModified[Calendar.MONTH] + 1) as String).padLeft(2, '0')
 
     final destFile = new File("$targetRoot/$mediaFolder/$year/$month", srcFile.name)
 
-    CpUtil.copy srcFile, destFile
+    CpUtil3.copy srcFile, destFile
 
     println line
 
@@ -55,8 +55,8 @@ println line
 
 final long durationMillis = System.currentTimeMillis() - startTimestamp
 
-println "$filesCopied files in ${CpUtil.formatWithUnits(bytesCopied)}"
-println "Took ${CpUtil.timeAsString(durationMillis)}"
+println "$filesCopied files in ${CpUtil3.formatWithUnits(bytesCopied)}"
+println "Took ${CpUtil3.timeAsString(durationMillis)}"
 
 //~ utility functions requiring class scope
 
@@ -91,7 +91,7 @@ class CpUtil3 {
 
         println src
         println "-> $dest"
-        println "${CpUtil.formatWithUnits(src.size())} copied (${CpUtil.formatTimestamp(src.lastModified())})"
+        println "${CpUtil3.formatWithUnits(src.size())} copied (${CpUtil3.formatTimestamp(src.lastModified())})"
     }
 
     static createParentDirectoryIfNeccessary(File file) {

@@ -1,3 +1,5 @@
+package safecopy
+
 import static CpUtil2.*
 
 /**
@@ -14,7 +16,7 @@ import static CpUtil2.*
 /* Optional CLI parsing
 
 def cli = new CliBuilder (
-    usage: 'safe_copy cliTest -s sdkdir {projectName}',
+    usage: 'safecopy.safe_copy cliTest -s sdkdir {projectName}',
     header: 'Safely copying image or movie files finding unique target filenames if target file is not the same as source')
 
 cli.h (longOpt: 'help', 'print usage information')
