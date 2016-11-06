@@ -49,13 +49,13 @@ class MediaFile {
         return directory
     }
 
-    static boolean copy(Map params) {
+    static long copy(Map params) {
 
         File srcFile = params.srcFile
         File destFile = params.destFile
 
         boolean keepSource = params.keepSource == null ? true : params.keepSource
-        boolean dryRun = params.dryRun ? params.keepSource : false
+        boolean dryRun     = params.dryRun == null ? false : params.dryRun
 
         assert srcFile, "src file missing"
         assert destFile, "dest file missing"
@@ -76,13 +76,13 @@ class MediaFile {
 
             if (srcFile.size() == destFile.size()) {
                 println "Skipped as destination $destFile.name has the same size as source."
-                return false
+                return 0
             }
 
             println "Using ${destFile.name}."
         }
 
-        println "${keepSource ? 'copy' : 'move'} srcFile.name -> $destFile"
+        println "${keepSource ? 'Copy' : 'Move'} srcFile.name -> $destFile"
         println "(${formatWithUnits(srcFile.size())})"
 
         if (!dryRun) {
@@ -102,7 +102,7 @@ class MediaFile {
             destFile.lastModified = srcFile.lastModified()
         }
 
-        return true
+        (destFile.exists() ? destFile : srcFile).size()
     }
 
     static createParentDirectoryIfNeccessary(File file) {

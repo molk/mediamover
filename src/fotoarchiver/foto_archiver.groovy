@@ -22,21 +22,15 @@ import static fotoarchiver.MediaFile.timeAsString
  * 04.11.2016
  */
 
-
 keepSourceFiles = false // copy or move
 dryRun = false
 
-sourceDir      = assertIsExistingDirectory '/Volumes/fotosundso/unsortiert/android_'
+sourceDir      = assertIsExistingDirectory '/Volumes/fotosundso/unsortiert/alexandra/iphone-2016-06-09'
 destinationDir = assertIsExistingDirectory '/Volumes/fotosundso/t'
 
 fileFilter = new MediaFile.Filter('all')
 
 line = '-' * 100
-
-long startTimestamp = System.currentTimeMillis()
-
-long filesCopied = 0
-long bytesCopied = 0
 
 println line
 
@@ -46,21 +40,18 @@ println "To     : $destinationDir"
 
 println line
 
-filesToCopy = sourceDir.listFiles fileFilter
+long startTimestamp = System.currentTimeMillis()
 
-filesToCopy.each { final File srcFile ->
-    def lastModified = new Date(srcFile.lastModified())
+long sumOfFilesCopied = 0
+long sumOfBytesCopied = 0
 
-    def mediaFolder = isVideo(srcFile) ? 'videos' : 'fotos'
-    def year        = lastModified[Calendar.YEAR] as String
-    def month       = ((lastModified[Calendar.MONTH] + 1) as String).padLeft(2, '0')
-    def destFolder  = "${destinationDir.absolutePath}/$mediaFolder/$year/$month"
+sourceDir.listFiles(fileFilter).each { srcFile ->
 
-    def destFile = new File(destFolder, srcFile.name)
+    def bytesCopied = copy srcFile: srcFile, destFile: destFileFor(srcFile), keepSource: keepSourceFiles, dryRun: dryRun
 
-    if (copy(srcFile: srcFile, destFile: destFile, keepSource: keepSourceFiles, dryRun: dryRun)) {
-        filesCopied += 1
-        bytesCopied += srcFile.size()
+    if (bytesCopied) {
+        sumOfFilesCopied += 1
+        sumOfBytesCopied += bytesCopied
     }
 
     println line
@@ -68,12 +59,24 @@ filesToCopy.each { final File srcFile ->
 
 def durationMillis = System.currentTimeMillis() - startTimestamp
 
-if (!filesCopied) {
+if (!sumOfFilesCopied) {
     println 'No files pushed.'
 }
 else {
-    println "$filesCopied files in ${formatWithUnits(bytesCopied)}"
+    println "$sumOfFilesCopied files in ${formatWithUnits(sumOfBytesCopied)}"
 }
 
 println "Took ${timeAsString(durationMillis)}"
 
+// helpers --------------------------------------------------------------------------
+
+File destFileFor(File srcFile) {
+    def lastModified = new Date(srcFile.lastModified())
+
+    def mediaFolder = isVideo(srcFile) ? 'videos' : 'fotos'
+    def year        = lastModified[Calendar.YEAR].toString()
+    def month       = (lastModified[Calendar.MONTH] + 1).toString().padLeft(2, '0')
+    def destFolder  = "${destinationDir.absolutePath}/$mediaFolder/$year/$month"
+
+    new File(destFolder, srcFile.name)
+}
