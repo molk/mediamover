@@ -1,10 +1,10 @@
 Media Mover
-===================================================================================================================================
+===========
 
 Some scripts for sorting media files pulled from cameras, phones or iPhoto
 
 Why?
------------
+----
 Initially I wanted to free my photos and movies from iPhoto.
 After that has been done using the `iphoto` scripts, the script `fotoarchiver` is used
 to move or copy media files from a flat directory to a target directory sorting them
