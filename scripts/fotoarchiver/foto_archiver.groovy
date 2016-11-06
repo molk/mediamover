@@ -25,12 +25,12 @@ import static MediaFile.timeAsString
 keepSourceFiles = false // copy or move
 dryRun = false
 
-sourceDir      = assertIsExistingDirectory '/Volumes/fotosundso/unsortiert/android'
+sourceDir      = assertIsExistingDirectory '/Volumes/fotosundso/unsortiert/iphone_2016-11-06'
 destinationDir = assertIsExistingDirectory '/Volumes/fotosundso/t'
 
 fileFilter = new MediaFile.Filter('all')
 
-line = '-' * 100
+line = '-' * 200
 
 println line
 
@@ -44,14 +44,19 @@ long startTimestamp = System.currentTimeMillis()
 
 long sumOfFilesCopied = 0
 long sumOfBytesCopied = 0
+def messages = []
 
 sourceDir.listFiles(fileFilter).each { srcFile ->
 
-    def bytesCopied = copy srcFile: srcFile, destFile: destFileFor(srcFile), keepSource: keepSourceFiles, dryRun: dryRun
+    def result = copy srcFile: srcFile, destFile: destFileFor(srcFile), keepSource: keepSourceFiles, dryRun: dryRun
 
-    if (bytesCopied) {
+    if (result.bytesCopied) {
         sumOfFilesCopied += 1
-        sumOfBytesCopied += bytesCopied
+        sumOfBytesCopied += result.bytesCopied
+    }
+
+    if (result.message) {
+        messages << result.message
     }
 
     println line
@@ -59,12 +64,20 @@ sourceDir.listFiles(fileFilter).each { srcFile ->
 
 def durationMillis = System.currentTimeMillis() - startTimestamp
 
+if (messages) {
+    println "\n$line"
+    println "The following files were not moved:"
+    messages.sort { it.contains '/fotos/' } .each { println it }
+    println "$line\n"
+}
+
 if (!sumOfFilesCopied) {
     println 'No files pushed.'
 }
 else {
     println "$sumOfFilesCopied files in ${formatWithUnits(sumOfBytesCopied)}"
 }
+
 
 println "Took ${timeAsString(durationMillis)}"
 
@@ -80,7 +93,6 @@ File destFileFor(File srcFile) {
 
     new File(destFolder, srcFile.name)
 }
-
 
 class MediaFile {
 
@@ -129,7 +141,7 @@ class MediaFile {
         return directory
     }
 
-    static long copy(Map params) {
+    static Map copy(Map params) {
 
         File srcFile = params.srcFile
         File destFile = params.destFile
@@ -146,8 +158,6 @@ class MediaFile {
         if (!dryRun) createParentDirectoryIfNeccessary destFile
 
         if (destFile.exists()) {
-            print "$srcFile.name already exists. "
-
             if (srcFile.size() != destFile.size()) {
                 while (destFile.exists() && srcFile.size() != destFile.size()) {
                     destFile = new File(destFile.parent, appendVersionTo(destFile.name))
@@ -155,17 +165,21 @@ class MediaFile {
             }
 
             if (srcFile.size() == destFile.size()) {
-                println "Skipped as destination $destFile.name has the same size as source."
-                return 0
+                def message = "$srcFile.name: Skipped as existing destination file has the same size as source: $destFile"
+                println message
+
+                return [bytesCopied: 0, message: message]
             }
 
             println "Using ${destFile.name}."
         }
 
-        println "${keepSource ? 'Copy' : 'Move'} srcFile.name -> $destFile"
+        println "${keepSource ? 'Copy' : 'Move'} $srcFile.name -> $destFile"
         println "(${formatWithUnits(srcFile.size())})"
 
         if (!dryRun) {
+            long fileDate = srcFile.lastModified()
+
             if (!keepSource) {
                 Files.move srcFile.toPath(), destFile.toPath()
             }
@@ -179,10 +193,10 @@ class MediaFile {
             }
 
             // keep the original file date
-            destFile.lastModified = srcFile.lastModified()
+            destFile.lastModified = fileDate
         }
 
-        (destFile.exists() ? destFile : srcFile).size()
+        [bytesCopied: (destFile.exists() ? destFile : srcFile).size()]
     }
 
     static createParentDirectoryIfNeccessary(File file) {
