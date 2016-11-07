@@ -1,4 +1,10 @@
+import groovy.transform.ToString
+
 import java.nio.file.Files
+import java.nio.file.attribute.BasicFileAttributeView
+import java.nio.file.attribute.BasicFileAttributes
+import java.nio.file.attribute.FileTime
+import java.util.concurrent.TimeUnit
 
 import static MediaFile.assertIsExistingDirectory
 import static MediaFile.copy
@@ -24,67 +30,78 @@ import static MediaFile.timeAsString
 
 keepSourceFiles = false // copy or move
 dryRun = false
+logfile = 'default'
 
-sourceDir      = assertIsExistingDirectory '/Volumes/fotosundso/unsortiert/iphone_2016-11-06'
+sourceDir      = assertIsExistingDirectory '/Volumes/fotosundso/unsortiert/android'
 destinationDir = assertIsExistingDirectory '/Volumes/fotosundso/t'
+fileFilter     = new MediaFile.Filter('all')
+logger         = new Logger(logfile)
 
-fileFilter = new MediaFile.Filter('all')
+// --------------------------------------------------------------------------------------------------------------------------------
+
+startTimestamp = System.currentTimeMillis()
+
+mediaFiles = sourceDir.listFiles(fileFilter)
 
 line = '-' * 200
 
-println line
+logger.log line
 
-println "Filter : $fileFilter"
-println "From   : $sourceDir"
-println "To     : $destinationDir"
+logger.log "Started : ${new Date(startTimestamp).format 'dd.MM.yyyy HH:mm:ss'}"
+logger.log "From    : $sourceDir"
+logger.log "To      : $destinationDir"
+logger.log "Filter  : $fileFilter"
+logger.log "Files   : ${mediaFiles.size()}"
+logger.log "Mode    : ${keepSourceFiles ? 'copy' : 'move'} ${!dryRun ? '' : '(dry run)'}"
 
-println line
-
-long startTimestamp = System.currentTimeMillis()
+logger.log line
 
 long sumOfFilesCopied = 0
 long sumOfBytesCopied = 0
-def messages = []
+def  messages = []
 
-sourceDir.listFiles(fileFilter).each { srcFile ->
+mediaFiles.each { srcFile ->
 
-    def result = copy srcFile: srcFile, destFile: destFileFor(srcFile), keepSource: keepSourceFiles, dryRun: dryRun
+    def result = \
+        copy srcFile: srcFile, destFile: destFileFor(srcFile), \
+             keepSource: keepSourceFiles, dryRun: dryRun, logger: logger
 
     if (result.bytesCopied) {
         sumOfFilesCopied += 1
         sumOfBytesCopied += result.bytesCopied
     }
 
-    if (result.message) {
-        messages << result.message
+    if (result.messages) {
+        messages.addAll result.messages
     }
 
-    println line
+    logger.log line
 }
 
 def durationMillis = System.currentTimeMillis() - startTimestamp
 
 if (messages) {
-    println "\n$line"
-    println "The following files were not moved:"
-    messages.sort { it.contains '/fotos/' } .each { println it }
-    println "$line\n"
+    logger.log "\n$line"
+    logger.log "The following files were not moved:"
+    messages.sort { it.contains '/fotos/' } .each { logger.log it }
+    logger.log "$line\n"
 }
 
 if (!sumOfFilesCopied) {
-    println 'No files pushed.'
+    logger.log 'No files pushed.'
 }
 else {
-    println "$sumOfFilesCopied files in ${formatWithUnits(sumOfBytesCopied)}"
+    logger.log "$sumOfFilesCopied files in ${formatWithUnits(sumOfBytesCopied)}"
 }
 
 
 println "Took ${timeAsString(durationMillis)}"
 
+
 // helpers --------------------------------------------------------------------------
 
 File destFileFor(File srcFile) {
-    def lastModified = new Date(srcFile.lastModified())
+    def lastModified = new Date(FileInfo.fromFile(srcFile).created)
 
     def mediaFolder = isVideo(srcFile) ? 'videos' : 'fotos'
     def year        = lastModified[Calendar.YEAR].toString()
@@ -93,6 +110,97 @@ File destFileFor(File srcFile) {
 
     new File(destFolder, srcFile.name)
 }
+
+// -----------------------------------------------------------------------------------------------------------------------------------
+
+class Logger {
+
+    File logfile
+
+    Logger(String logfilePath) {
+        logfile = createIfNotExists logfilePath
+    }
+
+    def log(String message) {
+        println message
+
+        if (logfile) logfile.append "$message\n"
+    }
+
+    private static createIfNotExists(String logfilePath) {
+        if (!logfilePath)  null
+        else {
+            def logfile = (logfilePath == 'default') \
+                ? new File(System.properties.'user.dir' as String, "mm-${new Date().format('yyyyMMdd-HHmmss')}.log")
+                : new File(logfilePath)
+
+            if (!logfile.exists()) {
+                if (!logfile.parentFile.exists()) {
+                    assert logfile.parentFile.mkdirs(), "Failed to create logfile parent folder $logfile.parentFile"
+                }
+                assert logfile.createNewFile(), "Failed to create logfile $logfile"
+            }
+
+            logfile
+        }
+    }
+
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------
+
+@ToString
+class FileInfo {
+
+    String path
+    long size
+    Long lastModified
+    Long lastAccess
+    Long created
+
+    long getCreated() {
+        Long value = created ?: lastModified
+
+        assert value, 'file creation date must not be missing here'
+
+        value
+    }
+
+    static FileInfo fromFile(file) {
+        file = file as File
+
+        def toMillis = { it?.to TimeUnit.MILLISECONDS }
+
+        def attributes = Files.readAttributes file.toPath(), BasicFileAttributes
+
+        new FileInfo(
+            path: file.absolutePath,
+            size: attributes.size(),
+            created: toMillis (attributes.creationTime()),
+            lastAccess: toMillis (attributes.lastAccessTime()),
+            lastModified: toMillis (attributes.lastModifiedTime()))
+    }
+
+    File rightShift(File file) {
+        def fromMillis = { Long ms -> ms ? FileTime.fromMillis(ms) : null }
+
+        Files.getFileAttributeView(file.toPath(), BasicFileAttributeView)
+            .setTimes(
+                fromMillis(lastModified),
+                fromMillis(lastAccess),
+                fromMillis(created))
+
+        file
+    }
+
+    String getDates() {
+        def s = { Long ms -> !ms ? 'n.a.' : new Date(ms).format('yyyy-MM-dd HH:mm:ss') }
+
+        "created: ${s created}, last modified: ${s lastModified}, last access: ${s lastAccess}"
+    }
+}
+
+// -----------------------------------------------------------------------------------------------------------------------------------
 
 class MediaFile {
 
@@ -138,7 +246,7 @@ class MediaFile {
             System.exit(-1)
         }
 
-        return directory
+        directory
     }
 
     static Map copy(Map params) {
@@ -146,11 +254,14 @@ class MediaFile {
         File srcFile = params.srcFile
         File destFile = params.destFile
 
+        Logger logger = params.logger
+
         boolean keepSource = params.keepSource == null ? true : params.keepSource
         boolean dryRun     = params.dryRun == null ? false : params.dryRun
 
         assert srcFile, "src file missing"
         assert destFile, "dest file missing"
+        assert logger, "logger missing"
 
         assert srcFile.isFile()
         assert srcFile.exists()
@@ -165,20 +276,30 @@ class MediaFile {
             }
 
             if (srcFile.size() == destFile.size()) {
-                def message = "$srcFile.name: Skipped as existing destination file has the same size as source: $destFile"
-                println message
+                def messages = ["$srcFile.name: Skipped as existing destination file has the same size as source: $destFile"]
 
-                return [bytesCopied: 0, message: message]
+                def srcFileInfo = FileInfo.fromFile srcFile
+                def destFileInfo = FileInfo.fromFile destFile
+
+                if (srcFileInfo.created > destFileInfo.created) {
+                    messages << "Destination file dates set to source file dates: ${srcFileInfo.dates} (was ${srcFileInfo.dates})"
+                    srcFileInfo >> destFile
+                }
+
+                messages.each { logger.log it }
+
+                return [bytesCopied: 0, messages: messages]
             }
 
-            println "Using ${destFile.name}."
+            logger.log "Using ${destFile.name}."
         }
 
-        println "${keepSource ? 'Copy' : 'Move'} $srcFile.name -> $destFile"
-        println "(${formatWithUnits(srcFile.size())})"
+        def srcFileInfo = FileInfo.fromFile srcFile
+
+        logger.log "${keepSource ? 'Copy' : 'Move'} $srcFile.name -> $destFile"
+        logger.log "${formatWithUnits(srcFileInfo.size)}, $srcFileInfo.dates"
 
         if (!dryRun) {
-            long fileDate = srcFile.lastModified()
 
             if (!keepSource) {
                 Files.move srcFile.toPath(), destFile.toPath()
@@ -192,8 +313,14 @@ class MediaFile {
                 }
             }
 
-            // keep the original file date
-            destFile.lastModified = fileDate
+            def destFileInfo = FileInfo.fromFile destFile
+
+            if (destFileInfo.created != srcFileInfo.created) {
+                srcFileInfo >> destFile
+                destFileInfo = FileInfo.fromFile destFile
+            }
+
+            assert destFileInfo.created == srcFileInfo.created
         }
 
         [bytesCopied: (destFile.exists() ? destFile : srcFile).size()]
@@ -286,11 +413,5 @@ class MediaFile {
             s += (!s.isEmpty() ? ", " : "") + seconds + " second" + ((seconds > 1) ? "s" : "")
 
         !s.isEmpty() ? s : (milliSecs + " ms");
-    }
-
-    static final dateFormatter = new java.text.SimpleDateFormat('yyyy-MM-dd HH:mm:ss')
-
-    static String formatTimestamp(long timestamp) {
-        dateFormatter.format(new Date(timestamp))
     }
 }
