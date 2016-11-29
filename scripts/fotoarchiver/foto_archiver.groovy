@@ -1,3 +1,8 @@
+@Grab('com.drewnoakes:metadata-extractor:2.9.1')
+
+import com.drew.imaging.jpeg.JpegMetadataReader
+import com.drew.metadata.exif.ExifReader
+import com.drew.metadata.exif.ExifSubIFDDirectory
 import groovy.transform.ToString
 
 import java.nio.file.Files
@@ -28,12 +33,11 @@ import static MediaFile.timeAsString
  * 04.11.2016
  */
 
-keepSourceFiles = false // copy or move
+keepSourceFiles = true // copy or move
 dryRun = false
 logfile = 'default'
-
-sourceDir      = assertIsExistingDirectory '/Volumes/fotosundso/unsortiert/android'
-destinationDir = assertIsExistingDirectory '/Volumes/fotosundso/t'
+sourceDir      = assertIsExistingDirectory '/Volumes/fotosundso/unsortiert/iphone-2016-11-29'
+destinationDir = assertIsExistingDirectory '/Volumes/fotosundso/t2'
 fileFilter     = new MediaFile.Filter('all')
 logger         = new Logger(logfile)
 
@@ -41,7 +45,7 @@ logger         = new Logger(logfile)
 
 startTimestamp = System.currentTimeMillis()
 
-mediaFiles = sourceDir.listFiles(fileFilter)
+mediaFiles = sourceDir.listFiles fileFilter
 
 line = '-' * 200
 
@@ -83,12 +87,12 @@ def durationMillis = System.currentTimeMillis() - startTimestamp
 if (messages) {
     logger.log "\n$line"
     logger.log "The following files were not moved:"
-    messages.sort { it.contains '/fotos/' } .each { logger.log it }
+    messages.each { logger.log it }
     logger.log "$line\n"
 }
 
 if (!sumOfFilesCopied) {
-    logger.log 'No files pushed.'
+    logger.log "No files ${keepSourceFiles ? 'copied' : 'moved'}."
 }
 else {
     logger.log "$sumOfFilesCopied files in ${formatWithUnits(sumOfBytesCopied)}"
@@ -101,11 +105,11 @@ println "Took ${timeAsString(durationMillis)}"
 // helpers --------------------------------------------------------------------------
 
 File destFileFor(File srcFile) {
-    def lastModified = new Date(FileInfo.fromFile(srcFile).created)
+    def created = new Date(FileInfo.fromFile(srcFile).created)
 
     def mediaFolder = isVideo(srcFile) ? 'videos' : 'fotos'
-    def year        = lastModified[Calendar.YEAR].toString()
-    def month       = (lastModified[Calendar.MONTH] + 1).toString().padLeft(2, '0')
+    def year        = created[Calendar.YEAR].toString()
+    def month       = (created[Calendar.MONTH] + 1).toString().padLeft(2, '0')
     def destFolder  = "${destinationDir.absolutePath}/$mediaFolder/$year/$month"
 
     new File(destFolder, srcFile.name)
@@ -154,31 +158,25 @@ class FileInfo {
 
     String path
     long size
-    Long lastModified
-    Long lastAccess
-    Long created
-
-    long getCreated() {
-        Long value = created ?: lastModified
-
-        assert value, 'file creation date must not be missing here'
-
-        value
-    }
+    long lastModified
+    long lastAccess
+    long created
 
     static FileInfo fromFile(file) {
         file = file as File
 
-        def toMillis = { it?.to TimeUnit.MILLISECONDS }
+        def toMillis = { FileTime fileTime -> fileTime ? fileTime.to(TimeUnit.MILLISECONDS) : 0L }
 
         def attributes = Files.readAttributes file.toPath(), BasicFileAttributes
+
+        def jpgOriginalDate = (file.name.toLowerCase().endsWith('.jpg')) ? readJpgCreationDateFrom(file) : null
 
         new FileInfo(
             path: file.absolutePath,
             size: attributes.size(),
-            created: toMillis (attributes.creationTime()),
-            lastAccess: toMillis (attributes.lastAccessTime()),
-            lastModified: toMillis (attributes.lastModifiedTime()))
+            created: jpgOriginalDate ? jpgOriginalDate.time : toMillis(attributes.creationTime()),
+            lastModified: jpgOriginalDate ? jpgOriginalDate.time : toMillis(attributes.lastModifiedTime()),
+            lastAccess: toMillis (attributes.lastAccessTime()))
     }
 
     File rightShift(File file) {
@@ -194,9 +192,21 @@ class FileInfo {
     }
 
     String getDates() {
-        def s = { Long ms -> !ms ? 'n.a.' : new Date(ms).format('yyyy-MM-dd HH:mm:ss') }
+        def asDate = { Long ms -> new Date(ms).format 'yyyy-MM-dd HH:mm:ss' }
 
-        "created: ${s created}, last modified: ${s lastModified}, last access: ${s lastAccess}"
+        "created: ${asDate created}, last modified: ${asDate lastModified}, last access: ${asDate lastAccess}"
+    }
+
+    static Date readJpgCreationDateFrom(File file) {
+        try {
+            JpegMetadataReader
+                .readMetadata(file, [new ExifReader()])
+                .getDirectory(ExifSubIFDDirectory)
+                .getDate(ExifSubIFDDirectory.TAG_DATETIME_ORIGINAL)
+        }
+        catch (failure) {
+            null
+        }
     }
 }
 
@@ -216,9 +226,10 @@ class MediaFile {
             mediaTypeParam = mediaTypeParam?.toLowerCase()
 
             switch (mediaTypeParam) {
-                case 'img': mediaType = MediaType.Images; break;
-                case 'vid': mediaType = MediaType.Videos; break;
-                default: mediaType = MediaType.All
+                case 'img': mediaType = MediaType.Images; break
+                case 'vid': mediaType = MediaType.Videos; break
+                case 'all': mediaType = MediaType.All; break
+                default: throw new IllegalArgumentException("Unsupported media type $mediaTypeParam. Expected one of: ${MediaType.values().collect { it as String }.join(',')}")
             }
         }
 
@@ -251,7 +262,7 @@ class MediaFile {
 
     static Map copy(Map params) {
 
-        File srcFile = params.srcFile
+        File srcFile  = params.srcFile
         File destFile = params.destFile
 
         Logger logger = params.logger
@@ -259,9 +270,9 @@ class MediaFile {
         boolean keepSource = params.keepSource == null ? true : params.keepSource
         boolean dryRun     = params.dryRun == null ? false : params.dryRun
 
-        assert srcFile, "src file missing"
-        assert destFile, "dest file missing"
-        assert logger, "logger missing"
+        assert srcFile  , "src file missing"
+        assert destFile , "dest file missing"
+        assert logger   , "logger missing"
 
         assert srcFile.isFile()
         assert srcFile.exists()
@@ -282,7 +293,7 @@ class MediaFile {
                 def destFileInfo = FileInfo.fromFile destFile
 
                 if (srcFileInfo.created > destFileInfo.created) {
-                    messages << "Destination file dates set to source file dates: ${srcFileInfo.dates} (was ${srcFileInfo.dates})"
+                    messages << "$srcFile.name: Destination file dates set to source file dates: ${srcFileInfo.dates} (was ${destFileInfo.dates})"
                     srcFileInfo >> destFile
                 }
 
@@ -313,14 +324,19 @@ class MediaFile {
                 }
             }
 
-            def destFileInfo = FileInfo.fromFile destFile
-
-            if (destFileInfo.created != srcFileInfo.created) {
-                srcFileInfo >> destFile
-                destFileInfo = FileInfo.fromFile destFile
+            if (srcFileInfo.created == 0) {
+                logger.log "*** WARN: Source file with zero creation date (aka 1.1.1970). Skipping creation date check."
             }
+            else {
+                def destFileInfo = FileInfo.fromFile destFile
 
-            assert destFileInfo.created == srcFileInfo.created
+                if (destFileInfo.lastModified != srcFileInfo.lastModified) {
+                    srcFileInfo >> destFile
+                    destFileInfo = FileInfo.fromFile destFile
+                }
+
+                assert destFileInfo.lastModified == srcFileInfo.lastModified
+            }
         }
 
         [bytesCopied: (destFile.exists() ? destFile : srcFile).size()]
